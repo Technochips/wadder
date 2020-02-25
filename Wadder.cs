@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
+using wadder.png;
+using wadder.wad;
 
 namespace wadder
 {
@@ -61,7 +63,13 @@ namespace wadder
 					Lump lump = new Lump();
 					lump.name = project.lumps[i].name;
 					lump.data = project.lumps[i].data;
-					wad.addLump(lump);
+					if(project.lumps[i].output == "png" && project.lumps[i].args.Length > 0)
+					{
+						PNG png = new PNG(lump.data);
+						png.AddOffset(Convert.ToInt32(project.lumps[i].args[0]), Convert.ToInt32(project.lumps[i].args[1]));
+						lump.data = png.RewriteData();
+					}
+					wad.AddLump(lump);
 					Console.WriteLine("Lump " + project.lumps[i].name + " processed.");
 				}
 				catch(IOException e)
@@ -72,7 +80,7 @@ namespace wadder
 					i--;
 				}
 			}
-			wad.save(Path.Combine(projectFolder, project.output));
+			wad.Save(Path.Combine(projectFolder, project.output));
 			Console.WriteLine("Saved at " + Path.Combine(projectFolder, project.output).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));
 			return 0;
 		}

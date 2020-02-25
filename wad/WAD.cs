@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 
-namespace wadder
+namespace wadder.wad
 {
 	class WAD
 	{
@@ -21,7 +21,7 @@ namespace wadder
 			data = new List<byte>();
 			directory = new List<byte>();
 		}
-		public void resetHeader()
+		public void ResetHeader()
 		{
 			header = new List<byte>();
 
@@ -38,7 +38,7 @@ namespace wadder
 			if (!BitConverter.IsLittleEndian) Array.Reverse(bytes);
 			for (int i = 0; i < 4; i++) header.Add(bytes[i]);
 		}
-		public void addLump(Lump lump)
+		public void AddLump(Lump lump)
 		{
 			lump.offset = lumpsSize + 12;
 			lumps.Add(lump);
@@ -64,11 +64,11 @@ namespace wadder
 
 			foreach (byte b in lump.data) data.Add(b);
 		}
-		public void save(string where)
+		public void Save(string where)
 		{
 			Directory.CreateDirectory(Path.GetDirectoryName(where));
 			BinaryWriter file = new BinaryWriter(System.IO.File.OpenWrite(where));
-			resetHeader();
+			ResetHeader();
 			file.Write(header.ToArray());
 			file.Write(data.ToArray());
 			file.Write(directory.ToArray());

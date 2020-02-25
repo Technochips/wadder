@@ -1,4 +1,4 @@
-﻿namespace wadder
+﻿namespace wadder.wad
 {
 	struct Lump
 	{
