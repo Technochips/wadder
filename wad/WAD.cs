@@ -38,9 +38,33 @@ namespace wadder.wad
 			if (!BitConverter.IsLittleEndian) Array.Reverse(bytes);
 			for (int i = 0; i < 4; i++) header.Add(bytes[i]);
 		}
+		public void ResetDirectory()
+		{
+			directory = new List<byte>();
+			foreach(Lump lump in lumps)
+			{
+				byte[] bytes = BitConverter.GetBytes(lump.offset);
+				if (!BitConverter.IsLittleEndian) Array.Reverse(bytes);
+				for (int i = 0; i < 4; i++) directory.Add(bytes[i]);
+
+				bytes = BitConverter.GetBytes(lump.data.Length);
+				if (!BitConverter.IsLittleEndian) Array.Reverse(bytes);
+				for (int i = 0; i < 4; i++) directory.Add(bytes[i]);
+
+				for (int i = 0; i < 8; i++)
+				{
+					if (i >= lump.name.Length)
+					{
+						directory.Add(0);
+						continue;
+					}
+					directory.Add(Convert.ToByte(lump.name[i]));
+				}
+			}
+		}
 		public void AddLump(Lump lump)
 		{
-			lump.offset = lumpsSize + 12;
+			lump.offset = lump.data.Length > 0 ? lumpsSize + 12 : 0;
 			lumps.Add(lump);
 			lumpsSize += lump.data.Length;
 
@@ -66,9 +90,10 @@ namespace wadder.wad
 		}
 		public void Save(string where)
 		{
-			Directory.CreateDirectory(Path.GetDirectoryName(where));
-			BinaryWriter file = new BinaryWriter(System.IO.File.OpenWrite(where));
 			ResetHeader();
+			ResetDirectory();
+			Directory.CreateDirectory(Path.GetDirectoryName(where));
+			BinaryWriter file = new BinaryWriter(System.IO.File.Open(where,FileMode.Create));
 			file.Write(header.ToArray());
 			file.Write(data.ToArray());
 			file.Write(directory.ToArray());

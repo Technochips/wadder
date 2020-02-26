@@ -5,6 +5,7 @@ namespace wadder
 	{
 		public string output;
 		public string type;
+		public bool compress;
 		public File[] lumps;
 	}
 }

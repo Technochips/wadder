@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using Newtonsoft.Json;
 using wadder.png;
 using wadder.wad;
@@ -44,6 +45,7 @@ namespace wadder
 
 			Project project = JsonConvert.DeserializeObject<Project>(System.IO.File.ReadAllText(projectFile));
 			if (arg.ContainsKey("output")) project.output = (string)arg["output"];
+			if (arg.ContainsKey("output")) project.compress = (bool)arg["compress"];
 
 			if (project.output == null)
 			{
@@ -80,7 +82,129 @@ namespace wadder
 					i--;
 				}
 			}
+			int uncompressedsize = wad.lumpsSize;
+			if(project.compress)
+			{
+				Console.WriteLine("Compression enabled");
+				Console.WriteLine("Calculating data edge difference...");
+				int[,] comp = new int[wad.lumps.Count,wad.lumps.Count];
+				for(int i = 0; i < wad.lumps.Count; i++) //after writing this i no longer understand what this does but it kinda works so
+				{
+					for (int j = 0; j < wad.lumps.Count; j++)
+					{
+						if (i == j) continue;
+						int mlength = Math.Max(wad.lumps[i].data.Length, wad.lumps[j].data.Length);
+						for(int k = 0; k < mlength; k++)
+						{
+							int c = 0;
+							byte ib;
+							byte jb;
+							bool done = false;
+							do
+							{
+								if(k+c >= wad.lumps[i].data.Length || c >= wad.lumps[j].data.Length)
+								{
+									done = true;
+									break;
+								}
+								ib = wad.lumps[i].data[k+c];
+								jb = wad.lumps[j].data[c];
+
+								if (ib == jb) c++;
+								else c = 0;
+							}
+							while (ib == jb);
+							if (done)
+							{
+								comp[i, j] = c;
+								break;
+							}
+						}
+					}
+				}
+
+
+				Console.WriteLine("Reordering lumps...");
+
+				List<int> lumporder = new List<int>();
+				int[] duplicate = new int[wad.lumps.Count];
+				for (int i = 0; i < wad.lumps.Count; i++)
+				{
+					duplicate[i] = -1;
+					if (wad.lumps[i].data.Length > 0)
+					{
+						for (int j = i - 1; j >= 0; j--)
+						{
+							if (comp[i, j] == comp[j, i] && wad.lumps[i].data.Length == wad.lumps[j].data.Length && comp[i,j] == wad.lumps[i].data.Length)
+							{
+								duplicate[i] = j;
+							}
+						}
+						if (duplicate[i] == -1) lumporder.Add(i);
+					}
+				}
+
+				lumporder.Sort((x,y) =>
+				{
+					if (comp[x, y] == comp[y, x] && wad.lumps[x].data.Length == wad.lumps[y].data.Length)
+						return 1;//wad.lumps[x].name.CompareTo(wad.lumps[y].name);
+					return comp[y,x] - comp[x, y];
+				});
+
+
+				Console.WriteLine("Rewriting...");
+
+				List<byte> newlumps = new List<byte>();
+				int lumpsSize = 0;
+				int offset = 12;
+				for(int i = 0; i < lumporder.Count; i++)
+				{
+					Lump lump = wad.lumps[lumporder[i]];
+					if (i == 0)
+					{
+						lump.offset = offset;
+						wad.lumps[lumporder[i]] = lump;
+						foreach (byte b in lump.data)
+						{
+							newlumps.Add(b);
+							lumpsSize++;
+						}
+						continue;
+					}
+					else
+					{
+						int magic = comp[lumporder[i-1], lumporder[i]];
+						offset += wad.lumps[lumporder[i - 1]].data.Length - magic;
+						lump.offset = offset;
+						wad.lumps[lumporder[i]] = lump;
+						for (int j = magic; j < wad.lumps[lumporder[i]].data.Length; j++)
+						{
+							newlumps.Add(wad.lumps[lumporder[i]].data[j]);
+							lumpsSize++;
+						}
+					}
+				}
+				for (int i = 0; i < duplicate.Length; i++)
+				{
+					if (duplicate[i] >= 0)
+					{
+						Lump duplump = wad.lumps[i];
+						duplump.offset = wad.lumps[duplicate[i]].offset;
+						wad.lumps[i] = duplump;
+					}
+				}
+				wad.data = newlumps;
+				wad.lumpsSize = lumpsSize;
+			}
+			Console.WriteLine("Saving...");
 			wad.Save(Path.Combine(projectFolder, project.output));
+			int totalsize = wad.lumpsSize + wad.header.Count + wad.directory.Count;
+			Console.WriteLine(totalsize + " bytes");
+			if (project.compress)
+			{
+				int old = (wad.header.Count + wad.directory.Count + uncompressedsize);
+				Console.WriteLine("Compared to " + old + " bytes uncompressed, that's a " + ((float)totalsize / old * 100) + "% size difference!");
+			}
 			Console.WriteLine("Saved at " + Path.Combine(projectFolder, project.output).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));
 			return 0;
 		}
