@@ -15,8 +15,13 @@ namespace wadder
 			Console.WriteLine("Wadder - the cool wad compiler");
 			Dictionary<string, object> arg = new Dictionary<string, object>();
 			{
-				for (int i = 1; i < args.Length; i++)
+				for (int i = 1; i <= args.Length; i++)
 				{
+					if(i == args.Length)
+					{
+						if (i > 1) arg[args[i - 1].Substring(1)] = true;
+						continue;
+					}
 					string s = args[i];
 					if(s[0] == '-')
 					{
@@ -45,7 +50,7 @@ namespace wadder
 
 			Project project = JsonConvert.DeserializeObject<Project>(System.IO.File.ReadAllText(projectFile));
 			if (arg.ContainsKey("output")) project.output = (string)arg["output"];
-			if (arg.ContainsKey("output")) project.compress = (bool)arg["compress"];
+			if (arg.ContainsKey("compress")) project.compress = (bool)arg["compress"];
 
 			if (project.output == null)
 			{
@@ -86,7 +91,7 @@ namespace wadder
 			if(project.compress)
 			{
 				Console.WriteLine("Compression enabled");
-				Console.WriteLine("Calculating data edge difference...");
+				/*Console.WriteLine("Calculating data edge difference...");
 				int[,] comp = new int[wad.lumps.Count,wad.lumps.Count];
 				for(int i = 0; i < wad.lumps.Count; i++) //after writing this i no longer understand what this does but it kinda works so
 				{
@@ -102,9 +107,9 @@ namespace wadder
 							bool done = false;
 							do
 							{
-								if(k+c >= wad.lumps[i].data.Length || c >= wad.lumps[j].data.Length)
+								if(c >= wad.lumps[j].data.Length || k + c >= wad.lumps[i].data.Length)
 								{
-									done = true;
+									if(k+c >= wad.lumps[i].data.Length) done = true;
 									break;
 								}
 								ib = wad.lumps[i].data[k+c];
@@ -121,35 +126,45 @@ namespace wadder
 							}
 						}
 					}
-				}
+				}*/
 
-
-				Console.WriteLine("Reordering lumps...");
+				Console.WriteLine("Checking duplicates...");
 
 				List<int> lumporder = new List<int>();
 				int[] duplicate = new int[wad.lumps.Count];
-				for (int i = 0; i < wad.lumps.Count; i++)
 				{
-					duplicate[i] = -1;
-					if (wad.lumps[i].data.Length > 0)
+					int duplicateCount = 0;
+					for (int i = 0; i < wad.lumps.Count; i++)
 					{
-						for (int j = i - 1; j >= 0; j--)
+						duplicate[i] = -1;
+						if (wad.lumps[i].data.Length > 0)
 						{
-							if (comp[i, j] == comp[j, i] && wad.lumps[i].data.Length == wad.lumps[j].data.Length && comp[i,j] == wad.lumps[i].data.Length)
+							for (int j = i - 1; j >= 0; j--)
 							{
-								duplicate[i] = j;
+								//if (comp[i, j] == comp[j, i] && wad.lumps[i].data.Length == wad.lumps[j].data.Length && comp[i, j] == wad.lumps[i].data.Length)
+								if (wad.lumps[i].data.Length == wad.lumps[j].data.Length)
+								{
+									int k;
+									for (k = 0; k < wad.lumps[i].data.Length; k++) if (wad.lumps[i].data[k] != wad.lumps[j].data[k]) break;
+									if(k == wad.lumps[i].data.Length)
+									{
+										duplicate[i] = j;
+										duplicateCount++;
+									}
+								}
 							}
+							if (duplicate[i] == -1) lumporder.Add(i);
 						}
-						if (duplicate[i] == -1) lumporder.Add(i);
 					}
+					Console.WriteLine(duplicateCount + " duplicates found.");
 				}
+
+				/*Console.WriteLine("Reordering lumps...");
 
 				lumporder.Sort((x,y) =>
 				{
-					if (comp[x, y] == comp[y, x] && wad.lumps[x].data.Length == wad.lumps[y].data.Length)
-						return 1;//wad.lumps[x].name.CompareTo(wad.lumps[y].name);
 					return comp[y,x] - comp[x, y];
-				});
+				});*/
 
 
 				Console.WriteLine("Rewriting...");
@@ -173,7 +188,7 @@ namespace wadder
 					}
 					else
 					{
-						int magic = comp[lumporder[i-1], lumporder[i]];
+						int magic = 0;// comp[lumporder[i-1], lumporder[i]];
 						offset += wad.lumps[lumporder[i - 1]].data.Length - magic;
 						lump.offset = offset;
 						wad.lumps[lumporder[i]] = lump;
