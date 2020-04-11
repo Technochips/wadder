@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using Newtonsoft.Json;
 using wadder.png;
+using wadder.sound;
 using wadder.wad;
+using wadder.wave;
 
 namespace wadder
 {
@@ -48,9 +49,15 @@ namespace wadder
 			string projectFolder = Path.GetDirectoryName(projectFile);
 			Console.WriteLine("Loading project...");
 
+			Dictionary<string, string> defaultLumpIO = new Dictionary<string, string>()
+			{
+				{"wave","lmp"}
+			};
+
 			Project project = JsonConvert.DeserializeObject<Project>(System.IO.File.ReadAllText(projectFile));
 			if (arg.ContainsKey("output")) project.output = (string)arg["output"];
 			if (arg.ContainsKey("compress")) project.compress = (bool)arg["compress"];
+			if (project.defaultLumpIO != null) foreach(KeyValuePair<string, string> entry in project.defaultLumpIO) defaultLumpIO[entry.Key] = entry.Value;
 
 			if (project.output == null)
 			{
@@ -65,12 +72,26 @@ namespace wadder
 				{
 					if (project.lumps[i].file != null) project.lumps[i].data = System.IO.File.ReadAllBytes(Path.Combine(projectFolder, project.lumps[i].file));
 					else if (project.lumps[i].data == null) project.lumps[i].data = new byte[0];
-					if (project.lumps[i].output == null) project.lumps[i].output = project.lumps[i].input;
+					if (project.lumps[i].output == null && project.lumps[i].input != null)
+					{
+						project.lumps[i].output = defaultLumpIO.ContainsKey(project.lumps[i].input) ? defaultLumpIO[project.lumps[i].input] : project.lumps[i].input;
+					}
 
 					Lump lump = new Lump();
 					lump.name = project.lumps[i].name;
 					lump.data = project.lumps[i].data;
-					if(project.lumps[i].output == "png" && project.lumps[i].args.Length > 0)
+					if (project.lumps[i].input != project.lumps[i].output)
+					{
+						if (project.lumps[i].input == "wave")
+						{
+							Sound wave = new WAVE(lump.data);
+							if (project.lumps[i].output == "lmp")
+							{
+								lump.data = new DoomSound(wave.GetGenericSound()).Save();
+							}
+						}
+					}
+					if(project.lumps[i].output == "png" && project.lumps[i].args != null && project.lumps[i].args.Length > 0)
 					{
 						PNG png = new PNG(lump.data);
 						png.AddOffset(Convert.ToInt32(project.lumps[i].args[0]), Convert.ToInt32(project.lumps[i].args[1]));
@@ -131,30 +152,46 @@ namespace wadder
 				Console.WriteLine("Checking duplicates...");
 
 				List<int> lumporder = new List<int>();
-				int[] duplicate = new int[wad.lumps.Count];
+				int[] duplicate = new int[wad.lumps.Count*2];
 				{
 					int duplicateCount = 0;
 					for (int i = 0; i < wad.lumps.Count; i++)
 					{
-						duplicate[i] = -1;
-						if (wad.lumps[i].data.Length > 0)
+						duplicate[i * 2] = -1;
+						duplicate[(i * 2) + 1] = -1;
+					}
+					for (int i = 0; i < wad.lumps.Count; i++)
+					{
+						if (wad.lumps[i].data.Length == 0) continue;
+						if (duplicate[i * 2] >= 0) continue;
+						for (int j = i == 0 ? i+1 : i-1; j < wad.lumps.Count; j += j < i ? -1 : 1)
 						{
-							for (int j = i - 1; j >= 0; j--)
+							if (j < 0) j = i;
+							if (duplicate[j*2] >= 0) continue;
+							if (wad.lumps[j].data.Length == 0) continue;
+							if (i == j) continue;
+							//if (comp[i, j] == comp[j, i] && wad.lumps[i].data.Length == wad.lumps[j].data.Length && comp[i, j] == wad.lumps[i].data.Length)
+							if (wad.lumps[j].data.Length <= wad.lumps[i].data.Length)
 							{
-								//if (comp[i, j] == comp[j, i] && wad.lumps[i].data.Length == wad.lumps[j].data.Length && comp[i, j] == wad.lumps[i].data.Length)
-								if (wad.lumps[i].data.Length == wad.lumps[j].data.Length)
+								int dif = wad.lumps[i].data.Length - wad.lumps[j].data.Length;
+								dif = dif == 0 ? 1 : dif;
+								for (int k = 0; k < dif; k++)
 								{
-									int k;
-									for (k = 0; k < wad.lumps[i].data.Length; k++) if (wad.lumps[i].data[k] != wad.lumps[j].data[k]) break;
-									if(k == wad.lumps[i].data.Length)
+									int l;
+									for (l = 0; l < wad.lumps[j].data.Length; l++) if (wad.lumps[i].data[l+k] != wad.lumps[j].data[l]) break;
+									if (l == wad.lumps[j].data.Length)
 									{
-										duplicate[i] = j;
+										duplicate[j*2] = i;
+										duplicate[(j*2)+1] = k;
 										duplicateCount++;
 									}
 								}
 							}
-							if (duplicate[i] == -1) lumporder.Add(i);
 						}
+					}
+					for (int i = 0; i < wad.lumps.Count; i++)
+					{
+						if (duplicate[i * 2] == -1) lumporder.Add(i);
 					}
 					Console.WriteLine(duplicateCount + " duplicates found.");
 				}
@@ -199,12 +236,12 @@ namespace wadder
 						}
 					}
 				}
-				for (int i = 0; i < duplicate.Length; i++)
+				for (int i = 0; i < duplicate.Length/2; i++)
 				{
-					if (duplicate[i] >= 0)
+					if (duplicate[i*2] >= 0)
 					{
 						Lump duplump = wad.lumps[i];
-						duplump.offset = wad.lumps[duplicate[i]].offset;
+						duplump.offset = wad.lumps[duplicate[i*2]].offset+ duplicate[(i*2)+1];
 						wad.lumps[i] = duplump;
 					}
 				}
@@ -217,7 +254,7 @@ namespace wadder
 			Console.WriteLine(totalsize + " bytes");
 			if (project.compress)
 			{
-				int old = (wad.header.Count + wad.directory.Count + uncompressedsize);
+				int old = wad.header.Count + wad.directory.Count + uncompressedsize;
 				Console.WriteLine("Compared to " + old + " bytes uncompressed, that's a " + ((float)totalsize / old * 100) + "% size difference!");
 			}
 			Console.WriteLine("Saved at " + Path.Combine(projectFolder, project.output).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));

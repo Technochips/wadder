@@ -27,6 +27,7 @@
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -67,11 +68,15 @@
     <Compile Include="File.cs" />
     <Compile Include="png\Chunk.cs" />
     <Compile Include="png\PNG.cs" />
+    <Compile Include="sound\DoomSound.cs" />
+    <Compile Include="sound\Sound.cs" />
     <Compile Include="wad\Lump.cs" />
     <Compile Include="Project.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="wad\WAD.cs" />
     <Compile Include="Wadder.cs" />
+    <Compile Include="sound\wave\Chunk.cs" />
+    <Compile Include="sound\wave\WAVE.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
